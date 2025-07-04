@@ -3,6 +3,7 @@ from app.ingestion import ingest_corpus
 from app.embeddings import embedding_model
 from app.faiss_index import faiss_index
 from app.schemas import QueryRequest
+from app.rag_service import generate_answer
 from dotenv import load_dotenv
 import os
 
@@ -23,8 +24,15 @@ async def startup():
 @app.post("/ask")
 async def ask_question(query: QueryRequest):
     query_vector = embedding_model.embed(query.question)
+    results = faiss_index.search(query_vector, k=query.top_k)
 
-    results = faiss_index.search(query_vector, k=3)
+    context = "\n\n".join([
+        f"- [{doc['metadata']['type'].capitalize()}] {doc['text']}" for doc in results
+    ])
 
-    # Simple return
-    return {"question": query.question, "top_k": query.top_k, "results": results}
+    final_answer = generate_answer(query.question, context)
+
+    return {
+        "question": query.question,
+        "answer": final_answer
+    }
